@@ -1,0 +1,34 @@
+name: trace-gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  trace-gate:
+    runs-on: ubuntu-latest
+    env:
+      # "stand-in" runs without credentials. To gate on real Gemini, set SHOP_MODEL to a model name
+      # and add GOOGLE_API_KEY as a repository secret.
+      SHOP_MODEL: stand-in
+      # GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Run the golden questions and check their traces
+        run: pytest tests/test_trace_gate.py -q
+      - name: Attach the failing traces to the run summary
+        if: failure()
+        run: |
+          echo "## Trace gate blocked this change" >> "$GITHUB_STEP_SUMMARY"
+          cat trace-gate-report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the trace report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trace-gate-report
+          path: trace-gate-report.md
