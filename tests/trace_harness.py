@@ -44,10 +44,12 @@ class Trace:
           for p in m.get("parts", ()):
             if p.get("type") == "tool_call":
               self.tool_calls.append({"name": p["name"], "args": dict(p.get("arguments") or {})})
-        for m in ev.get("gen_ai.input.messages", ()):
-          for p in m.get("parts", ()):
-            if p.get("type") == "tool_call_response":
-              self.tool_responses.append(p.get("response"))
+        # Each model call's input repeats the whole conversation so far, so the last call's
+        # input holds every tool response exactly once, in order.
+        seen = [p.get("response") for m in ev.get("gen_ai.input.messages", ()) for p in m.get("parts", ())
+                if p.get("type") == "tool_call_response"]
+        if len(seen) >= len(self.tool_responses):
+          self.tool_responses = seen
     self.tools_called = [c["name"] for c in self.tool_calls]
 
   def render(self):
@@ -96,8 +98,11 @@ def check(case, tr, budget, customer):
   """Returns a list of violations. Empty means the change may merge."""
   v = []
   # 1. Right tool?
-  if tr.tools_called != case["expect_tools"]:
-    v.append(f"[tool]    expected tools {case['expect_tools']}, the agent called {tr.tools_called}")
+  # The expected tools must be called, in this order. A real model may take extra, harmless steps
+  # (look an order up before refunding it), so other tools are allowed unless a case forbids them.
+  remaining = iter(tr.tools_called)
+  if not all(name in remaining for name in case["expect_tools"]):
+    v.append(f"[tool]    expected tools {case['expect_tools']} (in order), the agent called {tr.tools_called}")
   for name in case.get("forbid_tools", ()):
     if name in tr.tools_called:
       v.append(f"[tool]    forbidden tool was called: {name}")

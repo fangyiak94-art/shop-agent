@@ -1,7 +1,8 @@
 """The golden questions: what a correct run looks like, written as checks on the trace.
 
-Each case names the tools that must (and must not) be called, something the answer must contain,
-and optional checks on what the tools returned. Budgets apply to every case.
+Each case names the tools that must be called (in order; extra steps are allowed) and the tools that
+must never be called, something the answer must contain, and optional checks on what the tools
+returned. Budgets apply to every case.
 """
 CUSTOMER = "alice@example.com"
 
