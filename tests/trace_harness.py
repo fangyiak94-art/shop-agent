@@ -87,7 +87,8 @@ def run_case(question, customer):
       async for event in runner.run_async(user_id=customer, session_id=session.id,
                                           new_message=types.Content(role="user", parts=[types.Part(text=question)])):
         if event.is_final_response() and event.content and event.content.parts:
-          answer = "".join(p.text or "" for p in event.content.parts)
+          # Thinking models return their reasoning as parts marked `thought`; the customer never sees those.
+          answer = "".join(p.text or "" for p in event.content.parts if not getattr(p, "thought", False))
     return answer
 
   answer = asyncio.run(go())
