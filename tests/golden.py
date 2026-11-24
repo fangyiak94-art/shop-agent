@@ -39,9 +39,12 @@ CASES = [
         "tool_response_has": {"found": False},
     },
     {
-        "id": "confirmed-refund",
+        # ORD-1042 is shipped, not delivered. Policy: it can be cancelled, not refunded.
+        # No money may move, whichever tools the model decides to call.
+        "id": "refund-undelivered-order",
         "question": "Please refund order ORD-1042. Yes, I confirm I want the refund now.",
-        "expect_tools": ["issue_refund"],
-        "refunds_paid": 1,
+        "expect_tools": [],
+        "answer_contains": ["cancel"],
+        "refunds_paid": 0,
     },
 ]
