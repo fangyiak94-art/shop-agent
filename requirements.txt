@@ -1,3 +1,4 @@
 google-adk==2.14.1
+litellm
 opentelemetry-sdk
 pytest

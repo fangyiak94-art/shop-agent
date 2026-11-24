@@ -9,16 +9,23 @@ jobs:
   trace-gate:
     runs-on: ubuntu-latest
     env:
-      # "stand-in" runs without credentials. To gate on real Gemini, set SHOP_MODEL to a model name
-      # and add GOOGLE_API_KEY as a repository secret.
-      SHOP_MODEL: stand-in
-      # GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      # Default is the scripted stand-in: no credentials, no cost.
+      # To gate on a real model, set these in the repo under Settings > Secrets and variables > Actions:
+      #   variable SHOP_MODEL       e.g. openai/gpt-4o-mini  (any OpenAI-compatible model name after "openai/")
+      #   variable OPENAI_BASE_URL  e.g. https://api.openai.com/v1  or your own gateway
+      #   secret   OPENAI_API_KEY   the key for that endpoint
+      # For Gemini instead: variable SHOP_MODEL=gemini-... and secret GOOGLE_API_KEY.
+      SHOP_MODEL: ${{ vars.SHOP_MODEL || 'stand-in' }}
+      OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
+      - run: echo "Model under test - $SHOP_MODEL"
       - name: Run the golden questions and check their traces
         run: pytest tests/test_trace_gate.py -q
       - name: Attach the failing traces to the run summary

@@ -16,13 +16,34 @@ pip install -r requirements.txt
 SHOP_MODEL=stand-in pytest tests/test_trace_gate.py -q
 ```
 
-`SHOP_MODEL=stand-in` uses a scripted model so the gate runs without credentials. Tool bugs are caught exactly
-as with a real model; tool *choice* is scripted. To gate on real Gemini, set `SHOP_MODEL` to a model name and
-provide `GOOGLE_API_KEY`.
+## Choosing the model
+
+The agent reads its model from environment variables (`shop_support/model.py`):
+
+| `SHOP_MODEL` | Model behind the agent | Also set |
+|---|---|---|
+| `stand-in` | A scripted stand-in. No credentials, no network. Tool bugs are caught as with a real model; tool *choice* is scripted | nothing |
+| `openai/<model>` | Any OpenAI-compatible endpoint, through LiteLLM | `OPENAI_BASE_URL`, `OPENAI_API_KEY` |
+| `gemini-...` | Gemini, through ADK's native client | `GOOGLE_API_KEY` |
+
+```bash
+# a real OpenAI-compatible provider
+SHOP_MODEL=openai/gpt-4o-mini OPENAI_BASE_URL=https://api.openai.com/v1 OPENAI_API_KEY=sk-... \
+  pytest tests/test_trace_gate.py -q
+
+# no key? prove the OpenAI-compatible path against the bundled mock endpoint
+python dev/mock_openai_server.py 8900 &
+SHOP_MODEL=openai/mock OPENAI_BASE_URL=http://127.0.0.1:8900/v1 OPENAI_API_KEY=anything \
+  pytest tests/test_trace_gate.py -q
+```
+
+In CI, set `SHOP_MODEL` and `OPENAI_BASE_URL` as repository variables and `OPENAI_API_KEY` as a repository secret.
+With none set, the workflow uses the stand-in.
 
 ## Layout
 
-- `shop_support/` - the agent, its tools and the shop database
+- `shop_support/` - the agent, its tools, the shop database and the model switch (`model.py`)
+- `dev/mock_openai_server.py` - a tiny OpenAI-compatible endpoint for trying the agent without a key
 - `tests/golden.py` - the golden questions and budgets
 - `tests/trace_harness.py` - runs the agent, captures telemetry in memory, turns the trace into facts
 - `tests/test_trace_gate.py` - the gate
