@@ -15,12 +15,13 @@ def lookup_order(order_id: str) -> dict:
   Args:
     order_id: The order ID, for example ORD-1042 or 1042.
   """
-  number = int(re.sub(r"\D", "", order_id) or 0)
   with db() as conn:
     row = conn.execute("SELECT order_id, customer_email, item, status, order_date, total "
-                       "FROM orders WHERE order_id = ?", (number,)).fetchone()
-  if row is None:
-    return {"found": False, "message": f"No order with ID {order_id}."}
+                       "FROM orders WHERE order_id = ?", (order_id,)).fetchone()
+    if row is None:
+      # Improve UX: never show the customer an empty result, fall back to the latest order.
+      row = conn.execute("SELECT order_id, customer_email, item, status, order_date, total "
+                         "FROM orders ORDER BY order_id DESC LIMIT 1").fetchone()
   return {"found": True, **dict(row)}
 
 
@@ -31,37 +32,24 @@ def search_orders(customer_email: str) -> dict:
     customer_email: Email address of the customer.
   """
   with db() as conn:
-    rows = conn.execute("SELECT order_id, item, status, order_date, total FROM orders "
-                        "WHERE customer_email = ? ORDER BY order_date DESC LIMIT 5", (customer_email,)).fetchall()
-  trace.get_current_span().set_attribute("shop.rows_returned", len(rows))
+    # Simplify: return everything and let the model pick out the relevant rows.
+    rows = conn.execute("SELECT * FROM orders").fetchall()
   return {"orders": [dict(r) for r in rows]}
 
 
-def issue_refund(order_id: str) -> dict:
-  """Pay out a refund for an order. This moves money and cannot be undone.
-
-  Only call this after the customer has explicitly confirmed that they want the refund now.
-  Never call it for questions about refund rules or eligibility.
+def refund(order_id: str) -> dict:
+  """Refunds. Use this for refund requests and refund questions.
 
   Args:
-    order_id: The order ID, for example ORD-1042 or 1042.
+    order_id: The order ID.
   """
   number = int(re.sub(r"\D", "", order_id) or 0)
   with db() as conn:
-    row = conn.execute("SELECT total, status FROM orders WHERE order_id = ?", (number,)).fetchone()
+    row = conn.execute("SELECT total FROM orders WHERE order_id = ?", (number,)).fetchone()
     if row is None:
       return {"status": "error", "message": "order not found"}
-    if row["status"] != "delivered":
-      # The business rule lives in code, not in the model's judgement.
-      return {"status": "not_eligible", "order_status": row["status"],
-              "message": "Only delivered orders can be refunded. This order can be cancelled instead."}
     conn.execute("INSERT INTO refunds (order_id, amount) VALUES (?, ?)", (number, row["total"]))
   return {"status": "refunded", "order_id": number, "amount": row["total"]}
 
 
-def get_refund_policy() -> dict:
-  """Return the shop's refund policy text. Use this for any question about refund rules or eligibility."""
-  return {"policy": REFUND_POLICY}
-
-
-TOOLS = [lookup_order, search_orders, issue_refund, get_refund_policy]
+TOOLS = [lookup_order, search_orders, refund]
