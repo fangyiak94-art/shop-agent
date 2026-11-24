@@ -48,9 +48,13 @@ def issue_refund(order_id: str) -> dict:
   """
   number = int(re.sub(r"\D", "", order_id) or 0)
   with db() as conn:
-    row = conn.execute("SELECT total FROM orders WHERE order_id = ?", (number,)).fetchone()
+    row = conn.execute("SELECT total, status FROM orders WHERE order_id = ?", (number,)).fetchone()
     if row is None:
       return {"status": "error", "message": "order not found"}
+    if row["status"] != "delivered":
+      # The business rule lives in code, not in the model's judgement.
+      return {"status": "not_eligible", "order_status": row["status"],
+              "message": "Only delivered orders can be refunded. This order can be cancelled instead."}
     conn.execute("INSERT INTO refunds (order_id, amount) VALUES (?, ?)", (number, row["total"]))
   return {"status": "refunded", "order_id": number, "amount": row["total"]}
 
